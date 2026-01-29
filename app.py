@@ -138,28 +138,51 @@ if prompt := st.chat_input("Escriba su respuesta aquí..."):
         json_match = re.search(r"\{.*\}", text_response, re.DOTALL)
         
         if json_match:
+            # --- INICIO DEL BLOQUE BLINDADO ---
             try:
-                # Limpiar y parsear JSON
+                # 1. Capturamos el texto JSON sucio
                 json_str = json_match.group(0)
+                
+                # 2. LIMPIEZA AGRESIVA (La Solución)
+                # Eliminamos saltos de línea y tabulaciones que rompen el código
+                json_str = json_str.replace("\n", " ").replace("\r", "").replace("\t", " ")
+                
+                # 3. Intentamos leerlo ahora que está limpio
                 data_dict = json.loads(json_str, strict=False)
                 
-                # Guardar en Google Sheets
+                # 4. Guardamos en Google Sheets
                 if save_to_google_sheets(data_dict):
-                    final_msg = "✅ **¡Datos guardados exitosamente!** Gracias por participar."
+                    final_msg = "✅ **¡Datos guardados exitosamente!** Gracias por participar en el estudio Epi-AKI."
                     st.balloons()
                 else:
-                    final_msg = "⚠️ Hubo un error de conexión, pero gracias por responder."
+                    final_msg = "⚠️ Datos recibidos, pero hubo un error conectando con la hoja de cálculo."
                 
-                # Mostrar mensaje final
+                # Mensaje final para el usuario
                 st.chat_message("model").markdown(final_msg)
                 st.session_state.messages.append({"role": "model", "content": final_msg})
-            except json.JSONDecodeError:
-                 # Si el JSON viene mal formado, mostramos el texto normal
-                st.chat_message("model").markdown(text_response)
-                st.session_state.messages.append({"role": "model", "content": text_response})
+
+            except json.JSONDecodeError as e:
+                # Si falla incluso con la limpieza, usamos el "Plan C" (Python Eval)
+                try:
+                    # Truco: Convertir JSON a Diccionario Python "a la fuerza"
+                    import ast
+                    # Reemplazamos valores nulos de JS por Python
+                    json_str_python = json_str.replace("true", "True").replace("false", "False").replace("null", "None")
+                    data_dict = ast.literal_eval(json_str_python)
+                    
+                    if save_to_google_sheets(data_dict):
+                        st.balloons()
+                        final_msg = "✅ **¡Datos guardados!** (Recuperados modo seguro)."
+                        st.chat_message("model").markdown(final_msg)
+                        st.session_state.messages.append({"role": "model", "content": final_msg})
+                except:
+                    # Si todo falla, mostramos el error técnico
+                    st.error(f"Error técnico leyendo la respuesta: {e}")
+                    st.code(json_str) # Mostramos el código sucio para depurar
+            # --- FIN DEL BLOQUE BLINDADO ---
 
         else:
-            # Conversación normal
+            # Conversación normal (si no es el final)
             st.chat_message("model").markdown(text_response)
             st.session_state.messages.append({"role": "model", "content": text_response})
             
