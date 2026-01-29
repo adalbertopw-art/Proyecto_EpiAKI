@@ -141,7 +141,7 @@ if prompt := st.chat_input("Escriba su respuesta aquí..."):
             try:
                 # Limpiar y parsear JSON
                 json_str = json_match.group(0)
-                data_dict = json.loads(json_str)
+                data_dict = json.loads(json_str, strict=False))
                 
                 # Guardar en Google Sheets
                 if save_to_google_sheets(data_dict):
