@@ -62,7 +62,7 @@ generation_config = {
 # Usamos Try/Except por si la API Key falla
 try:
     model = genai.GenerativeModel(
-      model_name="gemini-pro",
+      model_name="gemini-3-flash-preview",
       generation_config=generation_config,
       system_instruction="""
         **ROL:** Asistente de Investigación IA del estudio 'Epi-AKI Colombia'.
