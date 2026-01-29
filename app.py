@@ -108,8 +108,11 @@ if "messages" not in st.session_state:
     # Iniciar el chat con el modelo
     try:
         st.session_state.chat_session = model.start_chat(history=[])
-        # Mensaje de bienvenida inicial
-        welcome_msg = "Bienvenido colega. Soy el asistente virtual del estudio. Para iniciar: ¿Ejerce usted en una única institución o en múltiples centros?"
+        # Mensaje de bienvenida inicial (CONSENTIMIENTO)
+        welcome_msg = """Bienvenido al Asistente Virtual del Comité de LRA (ASOCOLNEF). 
+Esta herramienta recolecta datos anónimos sobre patrones de práctica en Colombia para publicación científica.
+
+¿Autoriza el uso de sus respuestas con fines estadísticos? (Responda SI para iniciar)."""
         st.session_state.messages.append({"role": "model", "content": welcome_msg})
         st.session_state.chat_session.history.append({"role": "model", "parts": [welcome_msg]})
     except:
