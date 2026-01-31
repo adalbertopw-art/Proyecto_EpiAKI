@@ -61,9 +61,9 @@ generation_config = {
 }
 
 try:
-    # Usamos 'gemini-1.5-flash' que es rápido y estable
+    # Usamos 'gemini-3-flash' que es rápido y estable
     model = genai.GenerativeModel(
-      model_name="gemini-1.5-flash",
+      model_name="gemini-3-flash-preview",
       generation_config=generation_config,
       system_instruction="""
         **ROL:** Asistente de Investigación IA del estudio 'Epi-AKI Colombia'.
