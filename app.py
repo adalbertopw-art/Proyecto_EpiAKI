@@ -9,22 +9,33 @@ import ast # Librería para el "Plan B" de lectura
 # --- CONFIGURACIÓN DE LA PÁGINA ---
 st.set_page_config(page_title="Asistente Epi-AKI", page_icon="🩺")
 
-# --- 1. CONEXIÓN CON GOOGLE SHEETS (BASE DE DATOS) ---
+# --- 1. CONEXIÓN CON GOOGLE SHEETS (BLINDADA) ---
 def save_to_google_sheets(data_dict):
     try:
-        # Configuración de credenciales
         scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
         
         if "google_sheets" in st.secrets:
-            creds_dict = json.loads(st.secrets["google_sheets"]["json_key"])
+            # PASO CLAVE: Leer el secreto como texto crudo
+            raw_json_str = st.secrets["google_sheets"]["json_key"]
+            
+            # LIMPIEZA DE CREDENCIALES:
+            # A veces al pegar en Secrets, los "\n" se vuelven enters reales que rompen el JSON.
+            # Este truco lo arregla permitiendo caracteres de control:
+            try:
+                creds_dict = json.loads(raw_json_str, strict=False)
+            except json.JSONDecodeError:
+                # Si falla, intentamos una limpieza manual agresiva de la clave privada
+                # Esto es común si copiaste el JSON desde un PDF o Word
+                clean_str = raw_json_str.replace('\n', '\\n') 
+                creds_dict = json.loads(clean_str, strict=False)
+
             creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
             client = gspread.authorize(creds)
             
-            # Abre la hoja de cálculo por su nombre EXACTO
-            # Asegúrate que tu archivo en Drive se llame: Resultados_EpiAKI
+            # Abre la hoja de cálculo
             sheet = client.open("Resultados_EpiAKI").sheet1
             
-            # Prepara la fila a insertar
+            # Prepara la fila
             row = [
                 data_dict.get("multi_empleo", ""),
                 data_dict.get("tipo_centro_principal", ""),
@@ -38,11 +49,10 @@ def save_to_google_sheets(data_dict):
             sheet.append_row(row)
             return True
         else:
-            st.error("❌ ERROR: No se encontraron las credenciales en 'Secrets'.")
+            st.error("❌ ERROR: No hay secretos configurados.")
             return False
             
     except Exception as e:
-        # AQUÍ TE MOSTRARÁ EL ERROR REAL SI FALLA LA CONEXIÓN
         st.error(f"❌ ERROR DE CONEXIÓN CON EXCEL: {e}")
         return False
 
