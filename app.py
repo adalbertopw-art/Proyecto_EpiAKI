@@ -4,6 +4,7 @@ import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 import json
 import re
+import ast # Librería para el "Plan B" de lectura
 
 # --- CONFIGURACIÓN DE LA PÁGINA ---
 st.set_page_config(page_title="Asistente Epi-AKI", page_icon="🩺")
@@ -14,15 +15,14 @@ def save_to_google_sheets(data_dict):
         # Configuración de credenciales
         scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
         
-        # Cargamos las credenciales desde los 'Secretos' de Streamlit
         if "google_sheets" in st.secrets:
             creds_dict = json.loads(st.secrets["google_sheets"]["json_key"])
             creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
             client = gspread.authorize(creds)
             
-            # Abre la hoja de cálculo por su nombre
-            # IMPORTANTE: Asegurate que tu hoja en Drive se llame EXACTAMENTE asi:
-            sheet = client.open("Base_Datos_Final_ASOCOLNEF").sheet1
+            # Abre la hoja de cálculo por su nombre EXACTO
+            # Asegúrate que tu archivo en Drive se llame: Resultados_EpiAKI
+            sheet = client.open("Resultados_EpiAKI").sheet1
             
             # Prepara la fila a insertar
             row = [
@@ -38,11 +38,12 @@ def save_to_google_sheets(data_dict):
             sheet.append_row(row)
             return True
         else:
-            st.error("No se encontraron credenciales de Google Sheets en Secrets.")
+            st.error("❌ ERROR: No se encontraron las credenciales en 'Secrets'.")
             return False
             
     except Exception as e:
-        st.error(f"Error guardando datos: {e}")
+        # AQUÍ TE MOSTRARÁ EL ERROR REAL SI FALLA LA CONEXIÓN
+        st.error(f"❌ ERROR DE CONEXIÓN CON EXCEL: {e}")
         return False
 
 # --- 2. CONFIGURACIÓN DE GEMINI (CEREBRO) ---
@@ -59,10 +60,10 @@ generation_config = {
   "max_output_tokens": 8192,
 }
 
-# Usamos Try/Except por si la API Key falla
 try:
+    # Usamos 'gemini-1.5-flash' que es rápido y estable
     model = genai.GenerativeModel(
-      model_name="gemini-3-flash-preview",
+      model_name="gemini-1.5-flash",
       generation_config=generation_config,
       system_instruction="""
         **ROL:** Asistente de Investigación IA del estudio 'Epi-AKI Colombia'.
@@ -105,18 +106,18 @@ st.markdown("Comité de LRA - ASOCOLNEF")
 # Inicializar historial de chat
 if "messages" not in st.session_state:
     st.session_state.messages = []
-    # Iniciar el chat con el modelo
     try:
         st.session_state.chat_session = model.start_chat(history=[])
-        # Mensaje de bienvenida inicial (CONSENTIMIENTO)
+        # Mensaje de bienvenida CON CONSENTIMIENTO
         welcome_msg = """Bienvenido al Asistente Virtual del Comité de LRA (ASOCOLNEF). 
 Esta herramienta recolecta datos anónimos sobre patrones de práctica en Colombia para publicación científica.
 
 ¿Autoriza el uso de sus respuestas con fines estadísticos? (Responda SI para iniciar)."""
+        
         st.session_state.messages.append({"role": "model", "content": welcome_msg})
         st.session_state.chat_session.history.append({"role": "model", "parts": [welcome_msg]})
     except:
-        st.warning("Esperando configuración correcta de secretos...")
+        st.warning("Iniciando sistema...")
 
 # Mostrar mensajes anteriores
 for message in st.session_state.messages:
@@ -138,51 +139,46 @@ if prompt := st.chat_input("Escriba su respuesta aquí..."):
         json_match = re.search(r"\{.*\}", text_response, re.DOTALL)
         
         if json_match:
-            # --- INICIO DEL BLOQUE BLINDADO ---
+            # --- ZONA BLINDADA DE LIMPIEZA DE DATOS ---
             try:
-                # 1. Capturamos el texto JSON sucio
+                # 1. Capturar el JSON sucio
                 json_str = json_match.group(0)
                 
-                # 2. LIMPIEZA AGRESIVA (La Solución)
-                # Eliminamos saltos de línea y tabulaciones que rompen el código
-                json_str = json_str.replace("\n", " ").replace("\r", "").replace("\t", " ")
+                # 2. LIMPIEZA AGRESIVA: Quitamos saltos de línea invisibles que rompen 'heparina'
+                clean_json_str = json_str.replace("\n", " ").replace("\r", "").replace("\t", " ")
                 
-                # 3. Intentamos leerlo ahora que está limpio
-                data_dict = json.loads(json_str, strict=False)
+                # 3. Intentar leer con método estricto
+                data_dict = json.loads(clean_json_str, strict=False)
                 
-                # 4. Guardamos en Google Sheets
+                # 4. Guardar
                 if save_to_google_sheets(data_dict):
-                    final_msg = "✅ **¡Datos guardados exitosamente!** Gracias por participar en el estudio Epi-AKI."
+                    final_msg = "✅ **¡Datos guardados exitosamente!** Gracias por participar."
                     st.balloons()
                 else:
-                    final_msg = "⚠️ Datos recibidos, pero hubo un error conectando con la hoja de cálculo."
-                
-                # Mensaje final para el usuario
+                    final_msg = "⚠️ Datos recibidos, pero hubo un error de conexión con Excel. (Ver detalle arriba)"
+
                 st.chat_message("model").markdown(final_msg)
                 st.session_state.messages.append({"role": "model", "content": final_msg})
 
-            except json.JSONDecodeError as e:
-                # Si falla incluso con la limpieza, usamos el "Plan C" (Python Eval)
+            except json.JSONDecodeError:
+                # PLAN B: Si falla JSON, usamos AST (Lector de Python más tolerante)
                 try:
-                    # Truco: Convertir JSON a Diccionario Python "a la fuerza"
-                    import ast
-                    # Reemplazamos valores nulos de JS por Python
-                    json_str_python = json_str.replace("true", "True").replace("false", "False").replace("null", "None")
-                    data_dict = ast.literal_eval(json_str_python)
+                    # Convertimos valores de JS a Python
+                    python_str = json_str.replace("true", "True").replace("false", "False").replace("null", "None")
+                    data_dict = ast.literal_eval(python_str)
                     
                     if save_to_google_sheets(data_dict):
+                        final_msg = "✅ **¡Datos guardados!** (Recuperación automática)."
                         st.balloons()
-                        final_msg = "✅ **¡Datos guardados!** (Recuperados modo seguro)."
                         st.chat_message("model").markdown(final_msg)
                         st.session_state.messages.append({"role": "model", "content": final_msg})
-                except:
-                    # Si todo falla, mostramos el error técnico
-                    st.error(f"Error técnico leyendo la respuesta: {e}")
-                    st.code(json_str) # Mostramos el código sucio para depurar
-            # --- FIN DEL BLOQUE BLINDADO ---
+                except Exception as e:
+                    st.error(f"Error técnico procesando respuesta: {e}")
+                    st.code(json_str) # Mostrar código para depurar si todo falla
+            # ------------------------------------------
 
         else:
-            # Conversación normal (si no es el final)
+            # Conversación normal
             st.chat_message("model").markdown(text_response)
             st.session_state.messages.append({"role": "model", "content": text_response})
             
