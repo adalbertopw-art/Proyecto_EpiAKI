@@ -142,7 +142,7 @@ except Exception as e:
 # --- 3. INTERFAZ DE CHAT ---
 
 st.title("🩺 Estudio Epi-AKI Colombia")
-st.markdown("Comité de LRA - ASOCOLNEF")
+st.markdown("Comité de LRA - NEF")
 
 # Inicializar historial de chat
 if "messages" not in st.session_state:
@@ -150,7 +150,7 @@ if "messages" not in st.session_state:
     try:
         st.session_state.chat_session = model.start_chat(history=[])
         # Mensaje de bienvenida CON CONSENTIMIENTO
-        welcome_msg = """Bienvenido al Asistente Virtual del Comité de LRA (ASOCOLNEF). 
+        welcome_msg = """Bienvenido al Asistente Virtual del Comité de LRA (NEF). 
 Esta herramienta recolecta datos anónimos sobre patrones de práctica en Colombia para publicación científica.
 
 ¿Autoriza el uso de sus respuestas con fines estadísticos? (Responda SI para iniciar)."""
